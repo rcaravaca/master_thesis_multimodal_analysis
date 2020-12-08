@@ -1,1 +1,1 @@
-# master_thesis_multimodal_analysis
+# Master thesis - multimodal analysis
