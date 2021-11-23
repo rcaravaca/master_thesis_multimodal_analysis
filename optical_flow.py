@@ -70,7 +70,7 @@ def optical_flow(video=None, scale=1, blur=True, show_img=False, plot_mag=False)
 					
 					# get optical flow, (x,y) by pixel displacement
 					flow = cv2.calcOpticalFlowFarneback(prev_frame,gray_frame, None, **oflow_params)
-					mag, ang = cv2.cartToPolar(flow[:,:,0], flow[:,:,1])
+					mag, ang = cv2.cartToPolar(flow[:,:,0], flow[:,:,1], angleInDegrees=True)
 					
 					magnitude.append(mag)
 					angle.append(ang)

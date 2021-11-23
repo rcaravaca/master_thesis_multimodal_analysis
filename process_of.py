@@ -12,16 +12,16 @@ import sys
 import cv2 
 import os
 import glob
-import subprocess
+# import subprocess
 import argparse
 import utils
-from natsort import natsorted
+# from natsort import natsorted
 import json, codecs
-import pickle
+# import pickle
 import csv
 import optical_flow as of
 from datetime import datetime, timedelta
-
+import gc
 
 ### parse inputs arguments
 def get_parser():
@@ -112,6 +112,44 @@ def read_json(file):
 	else:
 		utils.msg("File: "+str(file)+" doest not exist!")
 
+
+front = 1
+right = 2
+left = 3
+behind = 4
+def get_angle(A, part="PART"):
+
+	hist, bin_edges = np.histogram(A, bins=np.arange(0,361,45))
+
+	angle = bin_edges[np.where(hist == hist.max())][0]
+
+	if part == "PART":
+		if angle == 0 or angle == 315: # front
+			orientation = front
+		elif angle == 45 or angle == 90: # right
+			orientation = right
+		elif angle == 135 or angle == 180: # behind
+			orientation = behind
+		elif angle == 225 or angle == 270: # left
+			orientation = left
+		else:
+			orientation = None
+	elif part == "PP":
+		if angle == 0 or angle == 315: # behind
+			orientation = behind
+		elif angle == 45 or angle == 90: # left
+			orientation = left
+		elif angle == 135 or angle == 180: # front
+			orientation = front
+		elif angle == 225 or angle == 270: # right
+			orientation = right
+		else:
+			orientation = None
+	else:
+		orientation = None
+
+	return orientation
+
 ### Get optical flow for given video
 def get_optical_flow(video_part, part="PART"):
 
@@ -195,7 +233,7 @@ def get_optical_flow(video_part, part="PART"):
 			ang_cluster[3] = angle[228:,114:228,:]
 			ang_cluster[2] = angle[:114,228:,:]
 			ang_cluster[1] = angle[114:228,228:,:]
-			ang_cluster[0] = angle[228:,228:,:]			
+			ang_cluster[0] = angle[228:,228:,:]
 	
 		mag_cluster_norm = np.zeros((3,3,magnitude.shape[2]))
 		ang_cluster_norm = np.zeros((3,3,magnitude.shape[2]))
@@ -213,7 +251,7 @@ def get_optical_flow(video_part, part="PART"):
 			# for each frame in cluster
 			for frame in range(mag_cluster[cluster].shape[2]):
 				mag_cluster_norm[rows,cols,frame] = np.linalg.norm(mag_cluster[cluster][:,:,frame], 'fro')
-				ang_cluster_norm[rows,cols,frame] = np.linalg.norm(ang_cluster[cluster][:,:,frame], 'fro')
+				ang_cluster_norm[rows,cols,frame] = get_angle(ang_cluster[cluster][:,:,frame], part=part)
 
 			cols += 1
 
@@ -221,31 +259,28 @@ def get_optical_flow(video_part, part="PART"):
 		utils.msg("File: "+str(video_part)+" does not exist!", "W")
 
 	return mag_cluster_norm, ang_cluster_norm
-
+	# , magnitude, angle
 
 #### MAIN #########################################
 if __name__ == "__main__":
-
-	day = args.day
 
 	# current date and time
 	start_now = datetime.now()
 	start_time = start_now.strftime("%d_%m_%Y__%H_%M_%S")
 
-	#### LOG FILE
-	log_file = "process_of."+start_time+"_day_"+str(day)+".log"
-	utils.make_log_file(log_file)
-
 	#### Get parse arguments
 	args = get_parser().parse_args()
+	d = args.day
+
+	#### LOG FILE
+	log_file = "process_of."+start_time+"_day_"+str(d)+".log"
+	utils.make_log_file(log_file)
 
 	input_dir = args.input_dir
 	days = os.listdir(input_dir)
 
 	output_dir = args.output_dir
 	utils.mkdir(output_dir)
-
-
 
 	with open('pairwise_date_response.csv', 'r') as file:
 
@@ -254,7 +289,7 @@ if __name__ == "__main__":
 		for date in reader:
 
 			Event = date[3]
-			if date[0] != "Date_ID" and Event == day:
+			if date[0] != "Date_ID" and Event == str(d):
 			
 				Date_ID = date[0]
 				Date_Order = date[5]
@@ -299,11 +334,9 @@ if __name__ == "__main__":
 					Part_video_path_glob = glob.glob(Part_video_path)
 
 					if len(Part_video_path_glob) == 0 or len(PP_video_path_glob) == 0:
-
-						utils.msg("One of the participants doesnt have DT! json file wont be created for date: "+str(Date_ID), "W")
+						utils.msg("One of the participants doesnt have video... json file wont be created for date.\n", "W")
 
 					elif len(Part_video_path_glob) == 1 and len(PP_video_path_glob) == 1:
-						
 						utils.msg("Part ID:\t\t"+ID)
 						utils.msg("PP ID:\t\t"+PP_ID)
 						utils.msg("Event:\t\t"+Event)
@@ -312,12 +345,10 @@ if __name__ == "__main__":
 						utils.msg("PP path:\t\t"+PP_video_path_glob[0])
 
 						### get_dense_trajectories(video, out_dir, L) to Part
-						# mag_cluster_norm_part, ang_cluster_norm_part = get_optical_flow(glob.glob(Part_video_path)[0], "PART")
+						mag_cluster_norm_part, ang_cluster_norm_part = get_optical_flow(glob.glob(Part_video_path)[0], "PART")
 
 						### get_dense_trajectories(video, out_dir, L) to PP
-						# mag_cluster_norm_pp, ang_cluster_norm_pp  = get_optical_flow(glob.glob(PP_video_path)[0], "PP")
-
-						### Remove DT
+						mag_cluster_norm_pp, ang_cluster_norm_pp = get_optical_flow(glob.glob(PP_video_path)[0], "PP")
 
 						temp_dict = {"Date_ID": Date_ID,
 									"Part_ID": ID,
@@ -330,10 +361,16 @@ if __name__ == "__main__":
 									"Date_Order": Date_Order,
 									"Part_path": Part_video_path_glob[0],
 									"PP_path": PP_video_path_glob[0],
-									# str(ID)+"_mag": mag_cluster_norm_part.tolist(),
-									# str(ID)+"_ang": ang_cluster_norm_part.tolist(),
-									# str(PP_ID)+"_mag": mag_cluster_norm_pp.tolist(),
-									# str(PP_ID)+"_ang": ang_cluster_norm_pp.tolist()
+
+									str(ID)+"_mag": mag_cluster_norm_part.tolist(),
+									str(ID)+"_ang": ang_cluster_norm_part.tolist(),
+									# str(ID)+"_full_mag": magnitude_part.tolist(),
+									# str(ID)+"_full_ang": angle_part.tolist(),
+
+									str(PP_ID)+"_mag": mag_cluster_norm_pp.tolist(),
+									str(PP_ID)+"_ang": ang_cluster_norm_pp.tolist()
+									# str(PP_ID)+"_full_mag": magnitude_pp.tolist(),
+									# str(PP_ID)+"_full_ang": angle_pp.tolist()
 
 									}
 		
@@ -341,10 +378,20 @@ if __name__ == "__main__":
 						video_final_time = datetime.now()
 						utils.msg("Elapsed time for date "+Date_ID+": "+str(video_final_time - ini_time_for_video))
 
-					else:
-						utils.msg("Multiple paths detected for one of videos!", "W")
+						temp_dict = {}
+						mag_cluster_norm_part = 0
+						ang_cluster_norm_part = 0
+						# magnitude_part = 0
+						# angle_part = 0
 
-					exit()
+						mag_cluster_norm_pp = 0
+						ang_cluster_norm_pp = 0
+						# magnitude_pp = 0
+						# angle_pp = 0
+						gc.collect()
+
+					else:
+						utils.msg("Multiple paths detected for one of videos!\n", "W")
 
 	utils.msg("Check log file: "+str(log_file))
 	final_time = datetime.now()

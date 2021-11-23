@@ -38,7 +38,7 @@ def msg(msg, tp=None):
 	elif tp == "E":
 		logging.error("UTILS_ERROR==> " + msg )
 	elif tp == "W":
-		logging.debug("UTILS_WARNING==> " + msg )
+		logging.warning("UTILS_WARNING==> " + msg )
 	else:
 		logging.info("\n")
 
