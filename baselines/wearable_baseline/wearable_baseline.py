@@ -12,6 +12,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, precision_recall_curve, auc, make_scorer, recall_score, accuracy_score, precision_score, confusion_matrix, classification_report, roc_auc_score, plot_roc_curve
 from sklearn.utils import shuffle
 from scipy import stats
+
+sys.path.append('/home/rcaravaca/Documents/Maestria/Tesis_Msc/master_thesis_multimodal_analysis/baselines')
 import baselines as bs
 
 if __name__ == "__main__":

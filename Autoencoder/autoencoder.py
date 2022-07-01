@@ -71,9 +71,8 @@ class multimodal_autoencoder(Model):
 		# latent_space = Input(shape=(hidden_layers_dim[-1],), name="latent_space")
 
 		# # Make multimodal decoder
-		_decoder = self._create_decoder(
-						_encoder, hidden_layers_dim, input_shapes, dropout_rates=dropout_rates, 
-												activity_regularizers=activity_regularizers)
+		_decoder = self._create_decoder(_encoder, hidden_layers_dim, input_shapes, dropout_rates=dropout_rates, 
+												activity_regularizers=activity_regularizers, output_activations=output_activations)
 
 		super(multimodal_autoencoder, self).__init__(
 						[model.input for model in input_models], _decoder)
@@ -81,12 +80,6 @@ class multimodal_autoencoder(Model):
 		self.encoder = Model(inputs=[model.input for model in input_models], outputs=_encoder)
 		self.decoder = Model(inputs=_encoder, outputs=_decoder)
 
-
-	# def call(self, x):
-
-	# 	encoded = self.encoder(x)
-	# 	decoded = self.decoder(encoded)
-	# 	return decoded
 
 	@staticmethod
 	def _get_output_shapes(layers):
@@ -104,7 +97,7 @@ class multimodal_autoencoder(Model):
 			for i, name in enumerate(modality_names):
 				inpt = Input(shape=input_shapes[i], name=str(name)+"_Input")
 				layers = Flatten(name=str(name)+"_Flatten")(inpt)
-				layers = Dense(units=layers.shape.dims[1].value, name=str(name)+"_Dense")(layers)
+				layers = Dense(units=layers.shape.dims[1].value, name=str(name)+"_Dense", activation='sigmoid')(layers)
 				layers = Model(inputs=inpt, outputs=layers)
 				input_models.append(layers)
 
@@ -112,7 +105,7 @@ class multimodal_autoencoder(Model):
 			for i, shape in enumerate(input_shapes):
 				inpt = Input(shape=shape)
 				layers = Flatten()(inpt)
-				layers = Dense(units=layers.shape.dims[1].value)(layers)
+				layers = Dense(units=layers.shape.dims[1].value, activation='sigmoid')(layers)
 				layers = Model(inputs=inpt, outputs=layers)
 				input_models.append(layers)
 
@@ -132,57 +125,50 @@ class multimodal_autoencoder(Model):
 
 		encoder = input_layer
 
-		for i, dim in enumerate(hidden_layers_dim):
-			encoder = Dense(dim, activation='relu', 
+		for i in range(len(hidden_layers_dim)-1):
+			encoder = Dense(hidden_layers_dim[i+1], activation='sigmoid', 
 								name="encoder_" + str(i),
 								activity_regularizer=activity_regularizers[i])(encoder)
-			encoder = Dropout(dropout_rates[i])(encoder)
+			encoder = Dropout(dropout_rates[i], name="Dropout_enc_"+str(i))(encoder)
+
+		encoder = Dense(hidden_layers_dim[-1], activation='relu', 
+								name="encoder_latent_space",
+								activity_regularizer=activity_regularizers[i])(encoder)
+		# encoder = Dropout(dropout_rates[-1], name="Dropout_enc_ls")(encoder)
 
 		return encoder
 
 	@classmethod
-	def _create_decoder(cls, latent_space, hidden_dims, input_shapes,
+	def _create_decoder(cls, input_model, hidden_dims, input_shapes,
 					  fusion_shapes=None, dropout_rates=None,
-					  activity_regularizers=None):
+					  activity_regularizers=None, output_activations='linear'):
 
-		decoder = latent_space
+		decoder = input_model
 
-		for i in range(len(hidden_dims) - 2, -1, -1):
-			decoder = Dense(hidden_dims[i], 
+		decoder = Dense(hidden_dims[-1], 
 							activation='relu',
+						  	name="decoder_latent_space", 
+						  	activity_regularizer=activity_regularizers[0])(decoder)
+		# decoder = Dropout(dropout_rates[-1], name="Dropout_dec_ls")(decoder)
+
+		for i in reversed(range(len(hidden_dims)-1)):
+			decoder = Dense(hidden_dims[i+1], 
+							activation='sigmoid',
 						  	name="decoder_" + str(i), 
 						  	activity_regularizer=activity_regularizers[i])(decoder)
-			decoder = Dropout(dropout_rates[i])(decoder)
+			decoder = Dropout(dropout_rates[i], name="Dropout_dec_"+str(i))(decoder)
 		
 		final_layers = []
 		for i, shape in enumerate(input_shapes):
-			layers = Dense(np.prod(np.asarray(shape)), name="output"+str(i))(decoder)
+			layers = Dense(np.prod(np.asarray(shape)), 
+								activation='sigmoid',
+								name="output"+str(i))(decoder)
+			# layers = Activation(output_activations)(layers)
 			layers = Reshape(shape)(layers)
 			final_layers.append(layers)
 
 
 		return final_layers
-
-	@classmethod
-	def _add_activations(cls, output_activations, output_decoder,
-						 output_autoencoder, modality_names=None):
-
-		output_activations = [output_activations] * len(output_decoder)
-
-		activations = [Activation(activation)
-					   for activation in output_activations]
-
-		if modality_names is None:
-
-			activations = [Activation(output_activations[i],
-									  name=cls._append_output_name(name))
-						   for i, name in enumerate(modality_names)]
-
-		for i, activation in enumerate(activations):
-			output_decoder[i] = activation(output_decoder[i])
-			output_autoencoder[i] = activation(output_autoencoder[i])
-
-		return output_decoder, output_autoencoder
 
 	@classmethod
 	def _rename_output_keys(cls, structure):
@@ -205,30 +191,32 @@ class multimodal_autoencoder(Model):
 		return structure
 
 
-	def fit(self, data=None, batch_size=None, epochs=1, verbose=1,
-			callbacks=None, validation_split=0.0, validation_data=None,
-			shuffle=True, sample_weight=None, validation_sample_weight=None,
-			initial_epoch=0, steps_per_epoch=None, validation_steps=None):
+	# def fit(self, data=None, batch_size=None, epochs=1, verbose=1,
+	# 		callbacks=None, validation_split=0.0, validation_data=None,
+	# 		shuffle=True, sample_weight=None, validation_sample_weight=None,
+	# 		initial_epoch=0, steps_per_epoch=None, validation_steps=None):
 
-		target_data = self._rename_output_keys(data)
-		if validation_data is not None:
-			validation_target_data = self._rename_output_keys(validation_data)
-			if validation_sample_weight is None:
-				validation_data = (validation_data, validation_target_data)
-			else:
-				validation_data = (validation_data, validation_target_data,
-								   validation_sample_weight)
-		return super(multimodal_autoencoder,
-					 self).fit(x=data, y=target_data, batch_size=batch_size,
-							   epochs=epochs, verbose=verbose,
-							   callbacks=callbacks,
-							   validation_split=validation_split,
-							   validation_data=validation_data,
-							   shuffle=shuffle,
-							   sample_weight=sample_weight,
-							   initial_epoch=initial_epoch,
-							   steps_per_epoch=steps_per_epoch,
-							   validation_steps=validation_steps)
+	# 	# # target_data = self._rename_output_keys(data)
+	# 	# if validation_data is not None:
+
+	# 	# 	validation_target_data = self._rename_output_keys(validation_data)
+
+	# 	# 	if validation_sample_weight is None:
+	# 	# 		validation_data = (validation_data, validation_target_data)
+	# 	# 	else:
+	# 	# 		validation_data = (validation_data, validation_target_data,
+	# 	# 							validation_sample_weight)
+	# 	return super(multimodal_autoencoder,
+	# 				 self).fit(x=data[0], y=data[1], batch_size=batch_size,
+	# 							epochs=epochs, verbose=verbose,
+	# 							callbacks=callbacks,
+	# 							validation_split=validation_split,
+	# 							validation_data=validation_data,
+	# 							shuffle=shuffle,
+	# 							sample_weight=sample_weight,
+	# 							initial_epoch=initial_epoch,
+	# 							steps_per_epoch=steps_per_epoch,
+	# 							validation_steps=validation_steps)
 
 	@classmethod
 	def _rename_output_keys(cls, structure):
@@ -269,7 +257,7 @@ class Autoencoder(Model):
 						Dense(latent_dim, activation='relu'),
 						Dense(hidden_dim, activation='sigmoid'),
 						Dense(input_dim, activation='sigmoid'),
-						Reshape((28, 28))
+						# Reshape((28, 28))
 		])
 
 	def call(self, x):
