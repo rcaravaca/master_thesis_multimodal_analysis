@@ -14,6 +14,7 @@ import os
 import glob
 # import subprocess
 import argparse
+sys.path.append('../miscellaneous/')
 import utils
 # from natsort import natsorted
 import json, codecs
@@ -22,6 +23,9 @@ import csv
 import optical_flow as of
 from datetime import datetime, timedelta
 import gc
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from collections import Counter
 
 ### parse inputs arguments
 def get_parser():
@@ -160,7 +164,7 @@ def get_optical_flow(video_part, part="PART"):
 		utils.msg(">>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
 		of_start_time = datetime.now()
-		magnitude, angle  = of.optical_flow(video=video_part, scale=1, blur=False, show_img=False, plot_mag=True)
+		magnitude, angle  = of.optical_flow(video=video_part, scale=1, blur=False, show_img=True, plot_mag=True)
 		of_final_time = datetime.now()
 		utils.msg("Optical flow elapsed time: "+str(of_final_time - of_start_time))
 
@@ -261,6 +265,67 @@ def get_optical_flow(video_part, part="PART"):
 	return mag_cluster_norm, ang_cluster_norm
 	# , magnitude, angle
 
+def normalizing(signal):
+
+	signal[signal == np.inf] = 0
+	max_val = np.max(signal)
+	return signal/max_val
+
+
+def print_signals(mag_cluster_norm_part, ang_cluster_norm_part):
+
+	fig, axs = plt.subplots(mag_cluster_norm_part.shape[0], mag_cluster_norm_part.shape[0], sharex='all', sharey='all', figsize=(8,6), dpi=700)
+
+
+	frame_count = mag_cluster_norm_part[0,0,:].shape[0]
+	seconds = np.linspace(0,frame_count//30+1,frame_count)
+	counter = 0
+	for r in range(mag_cluster_norm_part.shape[0]):
+		for c in range(mag_cluster_norm_part.shape[0]):
+
+			signal = normalizing(mag_cluster_norm_part[r,c,:])
+			axs[r, c].plot(seconds,signal)
+			axs[r, c].set_title(counter)
+			axs[r, c].grid(True)
+			counter += 1
+
+	fig.supxlabel('Seconds')
+	fig.supylabel('Magnitude')
+	plt.tight_layout()
+	plt.savefig("magnitud_by_cell.pdf")
+	plt.close()
+
+
+
+	fig, axs = plt.subplots(ang_cluster_norm_part.shape[0], ang_cluster_norm_part.shape[0], sharex='all', sharey='all', figsize=(8,6), dpi=700)
+	frame_count = ang_cluster_norm_part[0,0,:].shape[0]
+	seconds = np.linspace(0,frame_count//30+1,frame_count)
+	counter = 0
+
+	
+	for r in range(ang_cluster_norm_part.shape[0]):
+		for c in range(ang_cluster_norm_part.shape[0]):
+
+			ang_cluster_norm_part_lit = []
+			for i in range(frame_count//15 + 1):
+				# ang_cluster_norm_part_lit.append(np.bincount(np.asarray(ang_cluster_norm_part[r,c,i:i+30])))
+				values, counts = np.unique(ang_cluster_norm_part[r,c,i:i+15], return_counts=True)
+				ind = np.argmax(counts)
+				for f in range(15):
+					ang_cluster_norm_part_lit.append(values[ind])  # prints the most frequent element
+
+			signal = normalizing(ang_cluster_norm_part_lit[:-1])
+			axs[r, c].plot(seconds,signal)
+			axs[r, c].set_title(counter)
+			axs[r, c].grid(True)
+			counter += 1
+
+	fig.supxlabel('Seconds')
+	fig.supylabel('Direction')
+	plt.tight_layout()
+	plt.savefig("angles_by_cell.pdf")
+	plt.close()
+
 #### MAIN #########################################
 if __name__ == "__main__":
 
@@ -282,7 +347,7 @@ if __name__ == "__main__":
 	output_dir = args.output_dir
 	utils.mkdir(output_dir)
 
-	with open('pairwise_date_response.csv', 'r') as file:
+	with open('../pairwise_date_response.csv', 'r') as file:
 
 		reader = csv.reader(file)
 
@@ -345,8 +410,13 @@ if __name__ == "__main__":
 						utils.msg("PP path:\t\t"+PP_video_path_glob[0])
 
 						### get_dense_trajectories(video, out_dir, L) to Part
-						mag_cluster_norm_part, ang_cluster_norm_part = get_optical_flow(glob.glob(Part_video_path)[0], "PART")
-
+						# mag_cluster_norm_part, ang_cluster_norm_part = get_optical_flow(glob.glob(Part_video_path)[0], "PART")
+						# np.save('mag_cluster_norm_part.npy', mag_cluster_norm_part)
+						# np.save('ang_cluster_norm_part.npy', ang_cluster_norm_part)
+						mag_cluster_norm_part = np.load("mag_cluster_norm_part.npy")
+						ang_cluster_norm_part = np.load("ang_cluster_norm_part.npy")
+						print_signals(mag_cluster_norm_part, ang_cluster_norm_part)
+						exit()
 						### get_dense_trajectories(video, out_dir, L) to PP
 						mag_cluster_norm_pp, ang_cluster_norm_pp = get_optical_flow(glob.glob(PP_video_path)[0], "PP")
 

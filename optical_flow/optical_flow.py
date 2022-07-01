@@ -5,9 +5,11 @@ import cv2
 from progress.bar import FillingSquaresBar
 import argparse
 import matplotlib.pyplot as plt
-import video_check as vc
 from progress.bar import Bar
+import sys
 
+sys.path.append('../miscellaneous/')
+import video_check as vc
 
 def optical_flow(video=None, scale=1, blur=True, show_img=False, plot_mag=False):
 
@@ -59,8 +61,8 @@ def optical_flow(video=None, scale=1, blur=True, show_img=False, plot_mag=False)
 			if ret:
 
 				frame = cv2.resize(frame_bgr, (H_DIM,W_DIM), interpolation = cv2.INTER_AREA)
-				gray_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-				# gray_frame = cv2.normalize(gray_frame_orig*kernel, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+				gray_frame_orig = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+				gray_frame = cv2.normalize(gray_frame_orig*kernel, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
 
 				if blur:
 					ksize = (5, 5)
@@ -88,6 +90,10 @@ def optical_flow(video=None, scale=1, blur=True, show_img=False, plot_mag=False)
 						cv2.imshow('Optical flow',bgr)
 						cv2.imshow('Original',gray_frame_copy)
 
+						# if count_frames % 2 == 0:
+						# 	cv2.imwrite('opticalfb'+str(count_frames)+'.png',gray_frame_copy)
+						# 	cv2.imwrite('opticalhsv'+str(count_frames)+'.png',bgr)
+
 						key = cv2.waitKey(1) & 0xFF
 						if key == ord("q"):
 							break
@@ -111,8 +117,8 @@ def optical_flow(video=None, scale=1, blur=True, show_img=False, plot_mag=False)
 
 if __name__ == "__main__":
 
-	# video = "../msc_cleaning_dataset/spliter/individual_videos/day_2/p24/participant_p24_date_9_Speed_date_part_2_cam02_0_8670.avi"
-	video = "../msc_cleaning_dataset/spliter/individual_videos/day_2/p4/participant_p4_date_9_Speed_date_part_2_cam02_1_8670_RECOVERED.avi"
+	# video = "../../msc_cleaning_dataset/spliter/individual_videos/day_2/p24/participant_p24_date_9_Speed_date_part_2_cam02_0_8670.avi"
+	video = "../../msc_cleaning_dataset/spliter/individual_videos/day_2/p4/participant_p4_date_9_Speed_date_part_2_cam02_1_8670_RECOVERED.avi"
 
 	magnitude, angle = optical_flow(video=video, scale=1, blur=True, show_img=True, plot_mag=True)
 

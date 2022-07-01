@@ -60,9 +60,11 @@ if __name__ == "__main__":
 	train = pd.concat([video_train, wearable_train.reindex(video_train.index)], axis=1)
 	test = pd.concat([video_test, wearable_test.reindex(video_test.index)], axis=1)
 
+	## dropping date column
 	train = train.drop("date", axis=1)
 	test = test.drop("date", axis=1)
 
+	## normalizing
 	train = normalizing(train)
 	test = normalizing(test)
 
@@ -77,7 +79,13 @@ if __name__ == "__main__":
 	dropout_rates = 0
 
 	hidden_dims = [train_shape[1]/2, train_shape[1]/4, train_shape[1]/8, train_shape[1]/16]
+	
+	####################
 	autoencoder = ae.multimodal_autoencoder([(train_shape[1],)], hidden_dims, dropout_rates=dropout_rates)
+	###################
+	# autoencoder = ae.Autoencoder(train_shape[1], train_shape[1]/2, train_shape[1]/8)
+
+	#################
 
 	tf.keras.utils.plot_model(autoencoder, to_file="autoencoder.png", show_shapes=True, expand_nested=True, show_layer_names=True, show_layer_activations=True)
 
@@ -93,6 +101,6 @@ if __name__ == "__main__":
 	autoencoder.fit(train, train,
                 epochs=10,
                 shuffle=True,
-                # batch_size=8,
+                batch_size=2,
                 # callbacks=[tensorboard_callback],
                 validation_data=(test, test))

@@ -24,7 +24,7 @@ def drawing_grid(frame, step = 25, mirror=False):
 
 	img = frame.copy()
 
-	line_color = (0, 255, 0)
+	line_color = (255, 255, 255)
 	thickness = 1
 	type_ = cv2.LINE_AA
 	font = cv2.FONT_HERSHEY_SIMPLEX
@@ -107,8 +107,6 @@ if __name__ == "__main__":
 
 			# Display the resulting frame
 			cv2.imshow('Frame',frame)
-
-			
 
 			# Press Q on keyboard to	exit
 			if cv2.waitKey(25) & 0xFF == ord('q'):

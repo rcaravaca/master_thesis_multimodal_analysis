@@ -17,7 +17,7 @@ from scipy import stats
 import sys
 import re
 
-sys.path.append('/home/rcaravaca/Documents/Maestria/Tesis_Msc/master_thesis_multimodal_analysis/wearable_baseline')
+sys.path.append('/home/rcaravaca/Documents/Maestria/Tesis_Msc/master_thesis_multimodal_analysis/baselines')
 import baselines as bs
 
 if __name__ == "__main__":
