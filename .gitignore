@@ -1,0 +1,15 @@
+# ignore synchrony_features dir
+synchrony_features
+
+# ignore dataset dir
+dataset
+dataset_version_2
+
+# ignore baselines/*EXPERIMENTS*
+baselines/*EXPERIMENTS*
+baselines/VIDEO_PCA
+
+
+Autoencoder
+
+tsne_python*

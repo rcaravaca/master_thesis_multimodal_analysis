@@ -1,0 +1,7 @@
+
+
+- El video del baseline del paper no funciono y mostrar que el video es mejor
+- La representacion del AE
+- Se cumplio la hipotesis? No
+- Porque pasar a 3 day fold? No se piensa que realmente es lo correcto
+- 

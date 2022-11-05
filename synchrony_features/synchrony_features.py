@@ -141,6 +141,7 @@ def parsing_low_level_features(clusters):
 
 def plot_signals(mag_cluster_norm_part, ang_cluster_norm_part, plot=True):
 
+
 	if plot:
 		fig, axs = plt.subplots(3, 3, sharex='all', sharey='all', figsize=(8,6), dpi=300)
 
@@ -154,9 +155,10 @@ def plot_signals(mag_cluster_norm_part, ang_cluster_norm_part, plot=True):
 	c = 0
 	for cluster in mag_cluster_norm_part:
 
+		cluster[cluster == np.inf] = 0
 		signal_mag = cluster
 		if plot:
-			axs[r, c].plot(seconds,signal_mag)
+			axs[r, c].plot(seconds,normalize(signal_mag), linewidth=0.4)
 			axs[r, c].set_title(counter)
 			axs[r, c].grid(True)
 
@@ -184,6 +186,7 @@ def plot_signals(mag_cluster_norm_part, ang_cluster_norm_part, plot=True):
 	ang_cluster_norm_part_2 = []
 	for cluster in ang_cluster_norm_part:
 
+		cluster[cluster == np.inf] = 0
 		ang_cluster_norm_part_lit = []
 		for i in range(frame_count//second_div + 1):
 			# ang_cluster_norm_part_lit.append(np.bincount(np.asarray(ang_cluster_norm_part[r,c,i:i+30])))
@@ -195,7 +198,7 @@ def plot_signals(mag_cluster_norm_part, ang_cluster_norm_part, plot=True):
 		signal = np.asarray(ang_cluster_norm_part_lit[:-1])
 		ang_cluster_norm_part_2.append(signal)
 		if plot:
-			axs[r, c].plot(seconds,signal)
+			axs[r, c].plot(seconds,normalize(signal), linewidth=1)
 			axs[r, c].set_title(counter)
 			axs[r, c].grid(True)
 		
@@ -227,7 +230,7 @@ if __name__ == "__main__":
 	utils.msg("")
 	utils.msg("Extrating synchrony features\n")
 
-	dataset_dir = os.path.dirname("../dataset_version_2/json_version_2/")
+	dataset_dir = os.path.dirname("../dataset_version_2/golden_dataset/json_version_2/")
 	dataset_file = open("video_feauters." + now +".csv", "a")
 	json_dates = os.listdir(dataset_dir)
 
@@ -324,10 +327,10 @@ if __name__ == "__main__":
 			ang_clusters_part_aux = get_clusters(part_angle, part="PART")
 			ang_clusters_pp_aux = get_clusters(pp_angle, part="PP")
 
-			mag_clusters_part, ang_clusters_part = plot_signals(mag_clusters_part_aux, ang_clusters_part_aux, False)
-			mag_clusters_pp, ang_clusters_pp = plot_signals(mag_clusters_pp_aux, ang_clusters_pp_aux, False)
+			mag_clusters_part, ang_clusters_part = plot_signals(mag_clusters_part_aux, ang_clusters_part_aux, True)
+			# mag_clusters_pp, ang_clusters_pp = plot_signals(mag_clusters_pp_aux, ang_clusters_pp_aux, False)
 
-			# exit()
+			exit()
 
 			### Parsing low level features
 			low_level_mag_clusters_part = parsing_low_level_features(mag_clusters_part)

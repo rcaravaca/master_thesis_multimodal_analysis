@@ -10,7 +10,7 @@ from sklearn.naive_bayes import GaussianNB
 from scipy import stats
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
-from sklearn.metrics import roc_curve, precision_recall_curve, auc, make_scorer, recall_score, accuracy_score, precision_score, confusion_matrix, classification_report, roc_auc_score, plot_roc_curve, roc_curve, average_precision_score
+from sklearn.metrics import roc_curve, precision_recall_curve, auc, make_scorer, recall_score, accuracy_score, precision_score, confusion_matrix, classification_report, roc_auc_score, plot_roc_curve, roc_curve, average_precision_score, f1_score
 import operator
 from sklearn.base import BaseEstimator
 from sklearn.base import ClassifierMixin
@@ -121,11 +121,12 @@ def get_roc_curve(classifier, X, y, target_name, trains, tests, figure_tag='_non
 	decision_function = []
 	conf_matrix_list_of_arrays = []
 	predictions = []
-	precision = []
-	recall = []
-	aucs_pr = []
-	ap_pr = []
-	ar_pr = []
+	avpr_pr = []
+	accuracy = []
+	f1 = []
+	prec_score = []
+	rec_score = []
+	auc_precision_recall = []
 
 	fig, ax = plt.subplots(figsize=(10,7), dpi=100)
 	ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
@@ -154,25 +155,26 @@ def get_roc_curve(classifier, X, y, target_name, trains, tests, figure_tag='_non
 		conf_matrix = confusion_matrix(y[test], predict)
 		conf_matrix_list_of_arrays.append(conf_matrix)
 
+		######## metrics
+		accuracy.append(accuracy_score(y[test], predict))
+		f1.append(f1_score(y[test], predict))
+		prec_score.append(precision_score(y[test], predict))
+		rec_score.append(recall_score(y[test], predict))
+
+
 		######## PR
 		y_real.append(y[test])
-		y_proba.append(predict)
+		y_proba.append(y_score)
 
 		prec, rec, _ = precision_recall_curve(y[test], y_score)
+		auc_precision_recall.append(auc(rec, prec))
 
-		# precision.append(prec)
-		# recall.append(rec)
+		ap = average_precision_score(y[test], y_score)
+		avpr_pr.append(ap)
 
-		AUC = auc(rec, prec)
-		AP = np.mean(prec)
-		AR = np.mean(rec)
-
-		aucs_pr.append(AUC)
-		ap_pr.append(AP)
-		ar_pr.append(AR)
 		ax_pr.plot(rec, prec,
 								lw=1, alpha=0.4,
-				 				label='PR fold %d (AUC = %0.2f)' % (i, AUC)
+				 				label='PR fold %d (AP = %0.2f)' % (i, ap)
 				 				)
 		#####################################
 
@@ -192,22 +194,24 @@ def get_roc_curve(classifier, X, y, target_name, trains, tests, figure_tag='_non
 
 	mean_precisio, mean_recall, _ = precision_recall_curve(y_real, y_proba)
 
-	# mean_precisio = np.mean(precision, axis=0, dtype=np.float64)
-	# mean_recall = np.mean(recall, axis=0, dtype=np.float64)
+	mean_ap_pr = np.mean(avpr_pr)
+	std_ap_pr = np.std(avpr_pr)
 
-	mean_auc_pr = np.mean(aucs_pr)
-	mean_ap_pr = np.mean(ap_pr)
-	mean_ar_pr = np.mean(ar_pr)
-
-	std_auc_pr = np.mean(aucs_pr)
-	std_ap_pr = np.mean(ap_pr)
-	std_ar_pr = np.mean(ar_pr)
+	std_pr = np.std(mean_precisio, axis=0)
+	pr_upper = np.minimum(mean_precisio + std_pr, 1)
+	pr_lower = np.maximum(mean_precisio - std_pr, 0)
 
 	ax_pr.plot(mean_recall, mean_precisio, color='b',
-			 label=r'Precision-Recall (AUC = %0.2f $\pm$ %0.2f, AP = %0.2f $\pm$ %0.2f, AR = %0.2f $\pm$ %0.2f)' % (mean_auc_pr, std_auc_pr, mean_ap_pr, std_ap_pr, mean_ar_pr, std_ar_pr),
+			 label=r'Mean PR (AP = %0.2f $\pm$ %0.2f)' % (mean_ap_pr, std_ap_pr),
 			 lw=2, alpha=.8)
 	ax_pr.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05], 
 								title="PR curves for " + str(target_name) + " target.")
+
+	ax_pr.fill_between(mean_recall, pr_lower, pr_upper,
+											color='grey', 
+											alpha=.2, 
+											label=r'$\pm$ 1 std. dev.')
+	
 	ax_pr.legend(loc="upper right")
 	ax_pr.grid(True)
 	ax_pr.set_xlabel("Recall (Positive label: 1)")
@@ -237,15 +241,13 @@ def get_roc_curve(classifier, X, y, target_name, trains, tests, figure_tag='_non
 											alpha=.2, 
 											label=r'$\pm$ 1 std. dev.')
 
-	ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05], 
-								title="ROC curves for " + str(target_name) + " target.")
+	ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05], title="ROC curves for " + str(target_name) + " target.")
 	ax.legend(loc="lower right")
 	ax.grid(True)
 	# plt.show()
 	ax.figure.savefig("roc_auc_"+str(figure_tag)+"_"+str(target_name)+".pdf")
 	plt.close()
-	return mean_auc, std_auc, predict_probas, decision_function, np.mean(conf_matrix_list_of_arrays, axis=0), np.std(conf_matrix_list_of_arrays, axis=0), predictions
-
+	return aucs, decision_function, conf_matrix_list_of_arrays, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr
 
 def majority_vote(predict_probas_v, predict_probas_w, decision_function_v, decision_function_w, tests, y_test, target_name, figure_tag='_none_'):
 
@@ -332,12 +334,13 @@ def get_roc_curve_multimodal(classifier, X_list, y_list, target_name, trains, te
 	predict_probas = []
 	decision_function = []
 	conf_matrix_list_of_arrays = []
-	precision = []
-	recall = []
-	aucs_pr = []
-	ap_pr = []
-	ar_pr = []
-
+	predictions = []
+	avpr_pr = []
+	accuracy = []
+	f1 = []
+	prec_score = []
+	rec_score = []
+	auc_precision_recall = []
 
 	fig, ax = plt.subplots(figsize=(10,7), dpi=100)
 	ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r',
@@ -362,26 +365,27 @@ def get_roc_curve_multimodal(classifier, X_list, y_list, target_name, trains, te
 		conf_matrix = confusion_matrix(y0[test], predict)
 		conf_matrix_list_of_arrays.append(conf_matrix)
 
+		######## metrics
+		accuracy.append(accuracy_score(y0[test], predict))
+		f1.append(f1_score(y0[test], predict))
+		prec_score.append(precision_score(y0[test], predict))
+		rec_score.append(recall_score(y0[test], predict))
+
 		######## PR
 		y_real.append(y0[test])
 		y_proba.append(y_score)
 
-		prec, rec, _ = precision_recall_curve(y0[test], predict_proba[:,1])
+		prec, rec, _ = precision_recall_curve(y0[test], y_score)
+		auc_precision_recall.append(auc(rec, prec))
 
-		precision.append(prec)
-		recall.append(rec)
-		# AUC = auc(rec, prec)
-		AUC = roc_auc_score(y0[test], predict_proba[:, 1])
-		AP = np.mean(prec)
-		AR = np.mean(rec)
-		aucs_pr.append(AUC)
-		ap_pr.append(AP)
-		ar_pr.append(AR)
+		ap = average_precision_score(y0[test], y_score)
+		avpr_pr.append(ap)
+
 		ax_pr.plot(rec, prec,
 								lw=1, alpha=0.4,
-				 				label='PR fold %d (AUC = %0.2f)' % (i, AUC)
+				 				label='PR fold %d (AP = %0.2f)' % (i, ap)
 				 				)
-		#####################################
+		# #####################################
 
 		fpr, tpr, _ = roc_curve(y0[test],y_score)
 		roc_auc = auc(fpr, tpr)
@@ -401,24 +405,30 @@ def get_roc_curve_multimodal(classifier, X_list, y_list, target_name, trains, te
 	y_proba = np.concatenate(y_proba)
 
 	mean_precisio, mean_recall, _ = precision_recall_curve(y_real, y_proba)
-	# mean_precisio = np.mean(aucs_pr, axis=0, dtype=np.float64)
-	# mean_recall = np.mean(aucs_pr, axis=0, dtype=np.float64)
 
-	mean_auc_pr = np.mean(aucs_pr)
-	mean_ap_pr = np.mean(ap_pr)
-	mean_ar_pr = np.mean(ar_pr)
+	mean_ap_pr = np.mean(avpr_pr)
+	std_ap_pr = np.std(avpr_pr)
 
-	std_auc_pr = np.mean(aucs_pr)
-	std_ap_pr = np.mean(ap_pr)
-	std_ar_pr = np.mean(ar_pr)
+	# print(all_prec)
+	std_pr = np.std(mean_precisio, axis=0)
+	pr_upper = np.minimum(mean_precisio + std_pr, 1)
+	pr_lower = np.maximum(mean_precisio - std_pr, 0)
 
 	ax_pr.plot(mean_recall, mean_precisio, color='b',
-			 label=r'Precision-Recall (AUC = %0.2f $\pm$ %0.2f, AP = %0.2f $\pm$ %0.2f, AR = %0.2f $\pm$ %0.2f)' % (mean_auc_pr, std_auc_pr, mean_ap_pr, std_ap_pr, mean_ar_pr, std_ar_pr),
+			 label=r'Mean PR (AP = %0.2f $\pm$ %0.2f)' % (mean_ap_pr, std_ap_pr),
 			 lw=2, alpha=.8)
 	ax_pr.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05], 
 								title="PR curves for " + str(target_name) + " target.")
+
+	ax_pr.fill_between(mean_recall, pr_lower, pr_upper,
+											color='grey', 
+											alpha=.2, 
+											label=r'$\pm$ 1 std. dev.')
+	
 	ax_pr.legend(loc="upper right")
 	ax_pr.grid(True)
+	ax_pr.set_xlabel("Recall (Positive label: 1)")
+	ax_pr.set_ylabel("Precision (Positive label: 1)")
 	# plt.show()
 	ax_pr.figure.savefig("pr_curve_"+str(figure_tag)+"_"+str(target_name)+".pdf")
 	# ax_pr.close()
@@ -451,7 +461,7 @@ def get_roc_curve_multimodal(classifier, X_list, y_list, target_name, trains, te
 	# plt.show()
 	ax.figure.savefig("roc_auc_"+str(figure_tag)+"_"+str(target_name)+".pdf")
 	plt.close()
-	return mean_auc, std_auc, predict_probas, decision_function, np.mean(conf_matrix_list_of_arrays, axis=0), np.std(conf_matrix_list_of_arrays, axis=0)
+	return aucs, decision_function, conf_matrix_list_of_arrays, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr
 
 class majority_vote_class(BaseEstimator, ClassifierMixin):
 	"""
@@ -572,11 +582,19 @@ class majority_vote_class(BaseEstimator, ClassifierMixin):
 
 		return maj
 
-def img_confusion_matrix(cm, cm_std, classes, title = 'Normalized confusion matrix'):
+def img_confusion_matrix(cm, cm_std, classes, title = 'Normalized confusion matrix', norm = False):
 
 	# cm = cm.astype('float') / cm.sum()
 	# cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 	
+	cm = np.flip(cm,(0,1))
+	cm_std = np.flip(cm_std,(0,1))
+ 
+	norm_title = "Confusion matrix for "
+	if norm == True:
+		cm = cm.astype('float') / cm.sum()
+		cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+		norm_title = "Norm. confusion matrix for "
 
 	fig, ax = plt.subplots()
 	im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
@@ -586,7 +604,7 @@ def img_confusion_matrix(cm, cm_std, classes, title = 'Normalized confusion matr
 		   yticks=np.arange(cm.shape[0]),
 		   # ... and label them with the respective list entries
 		   xticklabels=classes, yticklabels=classes,
-		   title=title,
+		   title=norm_title+title.split(" ")[-2]+" interest",
 		   ylabel='True label',
 		   xlabel='Predicted label')
 
@@ -599,9 +617,14 @@ def img_confusion_matrix(cm, cm_std, classes, title = 'Normalized confusion matr
 	thresh = cm.max() - cm.min()
 	for i in range(cm.shape[0]):
 		for j in range(cm.shape[1]):
-			ax.text(j, i, "{:.2f}+-{:.2f}".format(cm[i, j],cm_std[i, j]),
-				ha="center", va="center",
-				color="white" if cm[i, j] > cm.max() - thresh/2 else "black")
+			if norm == False:
+				ax.text(j, i, "{:.2f}+-{:.2f}".format(cm[i, j],cm_std[i, j]),
+					ha="center", va="center",
+					color="white" if cm[i, j] > cm.max() - thresh/2 else "black")
+			else:
+				ax.text(j, i, "{:.2f}".format(cm[i, j]),
+					ha="center", va="center",
+					color="white" if cm[i, j] > cm.max() - thresh/2 else "black")
 
 	fig.tight_layout()
 	new_title = title.replace(" ", "_")

@@ -40,13 +40,14 @@ def baselines_excecution():
 
 	# date	avg_difangle	var_difangle	avgdis	vardis	decardis	movdistr_mean_a	movdistr_var_a	movdistr_mean_b	movdistr_var_b	motionsync_a_1	motionsync_a_2	motionsync_a_3	motionsync_a_4	motion_reaction_a	motion_reaction_b	varpos_a	varpos_b	M_1	M_2	M_3	M_4	M_5	M_6	PP_M_1	PP_M_2	PP_M_3	PP_M_4	PP_M_5	PP_M_6
 	################## GET VIDEO DATASET ############
-	dataset = pd.read_csv("../dataset/dataset_video.csv")
+	# dataset = pd.read_csv("../dataset/golden_dataset/dataset_video.csv")
+	dataset = pd.read_csv("../../msc_cleaning_dataset/dataset/dataset_video.csv")
 
 	# print(dataset.head(10))
-	sex = '_all'
+	sex = '_M'
 	# dataset = dataset[dataset['date'].str.contains(sex)]
-	day = '^13'
-	dataset = dataset[dataset['date'].str.contains(day)]
+	# day = '^13'
+	# dataset = dataset[dataset['date'].str.contains(day)]
 	dataset = dataset.reset_index()
 	dataset = dataset.drop(["index"], axis=1)
 	
@@ -92,11 +93,11 @@ def baselines_excecution():
 	print("\n\t\tWEARABLE BASELINE\n")
 	print("######################################################\n")
 
-	dataset = pd.read_csv("../dataset/dataset_wearables.csv")
+	dataset = pd.read_csv("../dataset/golden_dataset/dataset_wearables.csv")
 
 	# dataset = dataset[dataset['date'].str.contains(sex)]
-	day = '^13'
-	dataset = dataset[dataset['date'].str.contains(day)]
+	# day = '^13'
+	# dataset = dataset[dataset['date'].str.contains(day)]
 	dataset = dataset.reset_index()
 	dataset = dataset.drop(["index"], axis=1)
 
@@ -121,7 +122,8 @@ def baselines_excecution():
 	experiment = "sync_only"+str(sex)
 
 	os.system("rm "+str(experiment) +".csv")
-	output_csv = open(experiment +".csv", "a")
+	output_csv = open(experiment +"_pca.csv", "a")
+	auc_output_csv = open(experiment +"_aucs_pca.csv", "w")
 
 	#################################################
 	
@@ -135,10 +137,10 @@ def baselines_excecution():
 	knn_video = KNeighborsClassifier(algorithm='auto', leaf_size=2, n_neighbors=3, p=1, weights='uniform')
 	lr_wearable = LogisticRegression(C=0.00001, max_iter=100000, solver='liblinear')
 	# lr_wearable = LogisticRegression(C=0.00001, max_iter=100000)
-	svm_video = svm.SVC(C=2, kernel='rbf', probability=True)
-	svm_wearable = svm.SVC(C=2, kernel='rbf', probability=True)
+	svm_video = svm.SVC(C=2, kernel='rbf', probability=True, class_weight='balanced')
+	svm_wearable = svm.SVC(C=2, kernel='rbf', probability=True, class_weight='balanced')
 
-	wearable_model = svm_wearable
+	wearable_model = lr_wearable
 	# majority_vote = ec.majority_vote(clfs=[svm_video, wearable_model])
 
 	majority_vote2 = bu.majority_vote_class(clfs=[svm_video, wearable_model], weights=[1,1])
@@ -161,36 +163,46 @@ def baselines_excecution():
 	# smote = SMOTE()
 	rus = RandomUnderSampler()
 
+	param_grid = {'C': [0.001, 0.01, 0.1, 1, 10],
+                'gamma': [0.001, 0.01, 0.1, 1],
+		        'kernel': ['rbf', 'poly', 'sigmoid'],
+		        }
+
 	for target in targets:
 
 		# print(target, end="")
-		Xv_sh, Yv_sh, Xw_sh, Yw_sh = shuffle(X_video, Y_video[target], X_wearable, Y_wearable[target])
-
-		Xv_a = np.asarray(Xv_sh)
-		Xw_a = np.asarray(Xw_sh)
-
+		# Xv_sh, Yv_sh, Xw_sh, Yw_sh = shuffle(X_video, Y_video[target], X_wearable, Y_wearable[target])
+		Xv_sh, Yv_sh = shuffle(X_video, Y_video[target])
+		Xv = np.asarray(Xv_sh)
 		Yv = np.asarray(Yv_sh)
-		Yw = np.asarray(Yw_sh)
 
-		#############################################
-		if "MatchNOT" in target: 
-			Xv, Yv = rus.fit_resample(Xv_a, Yv)
-			id_rus = rus.sample_indices_
+		grid_v = GridSearchCV(svm.SVC(probability=True, class_weight='balanced'),param_grid,refit=True,verbose=0, scoring="roc_auc", cv=3)
+		grid_v.fit(Xv,Yv)
+		svm_video = grid_v.best_estimator_
 
-			Xw = Xw_a[id_rus]
-			Yw = Yw[id_rus]
+		# Xw = np.asarray(Xw_sh)
+		# Yw = np.asarray(Yw_sh)
 
-			Xv, Yv, Xw, Yw = shuffle(Xv, Yv, Xw, Yw)
-		else:
-			Xv = Xv_a
-			Xw = Xw_a
+		# #############################################
+		# if "MatchNOT" in target: 
+		# 	print("Resampling for: ",target)
+		# 	Xv, Yv = rus.fit_resample(Xv_a, Yv)
+		# 	id_rus = rus.sample_indices_
+
+		# 	Xw = Xw_a[id_rus]
+		# 	Yw = Yw[id_rus]
+
+		# 	Xv, Yv, Xw, Yw = shuffle(Xv, Yv, Xw, Yw)
+		# else:
+			# Xv = Xv_a
+			# Xw = Xw_a
 		#############################################
 
 		# Xv, Yv = smote.fit_resample(Xv, Yv)
 		# Xw, Yw = smote.fit_resample(Xw, Yw)
 
-		# Yv_test = np.asarray(Yv_sh_test[target])
-		# Yw_test = np.asarray(Yw_sh_test[target])		
+		# Yv = np.asarray(Yv_sh_test[target])
+		# Yw = np.asarray(Yw_sh_test[target])		
 
 		# print((Yv == 0).sum())
 		# print((Yv == 1).sum())
@@ -198,10 +210,8 @@ def baselines_excecution():
 		# print(Yv)
 		# print(Yw)
 
-		splits_train = cv.split(Xw, Yw)
-
-
-		# splits_test = cv.split(Xv_test, Yv_test)
+		splits_train = cv.split(Xv, Yv)
+		# splits_test = cv.split(Xw, Yw)
 		
 		trains = []
 		tests = []
@@ -212,39 +222,60 @@ def baselines_excecution():
 		# for i , (train, test) in enumerate(splits_test):
 		# 	tests.append(test)
 
+		###########################
+		auc_observations = []
+		conf_matrix_lst = []
+		
+		aucs, decision_function, conf_matrix, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr = bu.get_roc_curve(svm_video, Xv, Yv, target, trains, tests, experiment+"PCA_video_test")
+		for auc_ in aucs:
+		  auc_observations.append(auc_)
 
-		mean_auc_v, std_auc_v, predict_probas_v, decision_function_v, conf_matrix_v, predictions_v = bu.get_roc_curve(svm_video, Xv, Yv, target, trains, tests, "video")
-		bu.img_confusion_matrix(conf_matrix_v, [0, 1], title="Video classifier for "+str(target)+" target")
+		for mtx in conf_matrix:
+		  conf_matrix_lst.append(mtx)
 
-		mean_auc_w, std_auc_w, predict_probas_w, decision_function_w, conf_matrix_w, predictions_w = bu.get_roc_curve(wearable_model, Xw, Yw, target, trains, tests, "wearables")
-		bu.img_confusion_matrix(conf_matrix_w, [0, 1], title="Wearables classifier for "+str(target)+" target")
+		bu.img_confusion_matrix(np.mean(conf_matrix_lst, axis=0), np.std(conf_matrix_lst, axis=0), [1, 0], title="PCA_"+str(target)+" target")
+		bu.img_confusion_matrix(np.mean(conf_matrix_lst, axis=0), np.std(conf_matrix_lst, axis=0), [1, 0], title="Norm_PCA_"+str(target)+" target", norm=True)
 
-		mean_auc_mv, std_auc_mv, prob, decision_function_mv, conf_matrix_mv = bu.get_roc_curve_multimodal(majority_vote2, [Xv, Xw], [Yv, Yw], target, trains, tests, "Majority_vote")
-		bu.img_confusion_matrix(conf_matrix_mv, [0, 1], title="Majority vote classifier for "+str(target)+" target")
-		# mean_auc_mv, std_auc_mv, prob, decision_function_mv = bu.majority_vote(predict_probas_v, predict_probas_w, decision_function_v, decision_function_w, tests, Yv, target, "majority_vote")
+		auc_observations_str = np.array2string(np.asarray(auc_observations), precision=9, separator=',', max_line_width=100000)
+		auc_output_csv.write(str(target)+","+auc_observations_str[1:-1]+"\n")
+		##############################
 
-		a = str(',%0.2f+-%0.2f,%0.2f+-%0.2f,%0.2f+-%0.2f' % (mean_auc_v, std_auc_v, mean_auc_w, std_auc_w, mean_auc_mv, std_auc_mv))
+		# mean_auc_v, std_auc_v, decision_function_v, conf_matrix_v, conf_matrix_v_std, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr = bu.get_roc_curve(svm_video, Xv, Yv, target, trains, tests, "video")
+		# # bu.img_confusion_matrix(conf_matrix_v, [0, 1], title="Video classifier for "+str(target)+" target")
+		# bu.img_confusion_matrix(conf_matrix_v, conf_matrix_v_std, [0, 1], title="Video classifier for "+str(target)+" target")
 
-		final_des_func_v = np.concatenate( decision_function_v, axis=0 )
-		final_des_func_w = np.concatenate( decision_function_w, axis=0 )
-		final_des_func_mv = np.concatenate( decision_function_mv, axis=0 )
+		# mean_auc_w, std_auc_w, decision_function_w, conf_matrix_w, conf_matrix_w_std, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr = bu.get_roc_curve(wearable_model, Xw, Yw, target, trains, tests, "wearables")
+		# # bu.img_confusion_matrix(conf_matrix_w, [0, 1], title="Wearables classifier for "+str(target)+" target")
+		# bu.img_confusion_matrix(conf_matrix_w, conf_matrix_w_std, [0, 1], title="Wearables classifier for "+str(target)+" target")
 
-		final_predictions_v = np.concatenate( predictions_v, axis=0 )
-		final_predictions_w = np.concatenate( predictions_w, axis=0 )
+		# mean_auc_mv, std_auc_mv, decision_function_mv, conf_matrix_mv, conf_matrix_mv_std, accuracy, f1, prec_score, rec_score, auc_precision_recall, mean_ap_pr, std_ap_pr = bu.get_roc_curve_multimodal(majority_vote2, [Xv, Xw], [Yv, Yw], target, trains, tests, "Majority_vote")
+		# # bu.img_confusion_matrix(conf_matrix_mv, [0, 1], title="Majority vote classifier for "+str(target)+" target")
+		# # mean_auc_mv, std_auc_mv, prob, decision_function_mv = bu.majority_vote(predict_probas_v, predict_probas_w, decision_function_v, decision_function_w, tests, Yv, target, "majority_vote")
+		# bu.img_confusion_matrix(conf_matrix_mv, conf_matrix_mv_std, [0, 1], title="Majority vote classifier for "+str(target)+" target")
 
-		des_final_predictions_v = np.array2string(final_predictions_v, precision=9, separator=',', max_line_width=100000)
-		des_final_predictions_w = np.array2string(final_predictions_w, precision=9, separator=',', max_line_width=100000)
+		# a = str(',%0.2f+-%0.2f,%0.2f+-%0.2f,%0.2f+-%0.2f' % (mean_auc_v, std_auc_v, mean_auc_w, std_auc_w, mean_auc_mv, std_auc_mv))
 
-		des_func_v_str = np.array2string(final_des_func_v, precision=9, separator=',', max_line_width=100000)
-		des_func_w_str = np.array2string(final_des_func_w, precision=9, separator=',', max_line_width=100000)
-		des_func_mv_str = np.array2string(final_des_func_mv, precision=9, separator=',', max_line_width=100000)
+		# final_des_func_v = np.concatenate( decision_function_v, axis=0 )
+		# final_des_func_w = np.concatenate( decision_function_w, axis=0 )
+		# final_des_func_mv = np.concatenate( decision_function_mv, axis=0 )
 
-		print(str(target)+str('\t%0.2f+-%0.2f\t%0.2f+-%0.2f\t%0.2f+-%0.2f' % (mean_auc_v, std_auc_v, mean_auc_w, std_auc_w, mean_auc_mv, std_auc_mv)))
+		# # final_predictions_v = np.concatenate( predictions_v, axis=0 )
+		# # final_predictions_w = np.concatenate( predictions_w, axis=0 )
+
+		# # des_final_predictions_v = np.array2string(final_predictions_v, precision=9, separator=',', max_line_width=100000)
+		# # des_final_predictions_w = np.array2string(final_predictions_w, precision=9, separator=',', max_line_width=100000)
+
+		# des_func_v_str = np.array2string(final_des_func_v, precision=9, separator=',', max_line_width=100000)
+		# des_func_w_str = np.array2string(final_des_func_w, precision=9, separator=',', max_line_width=100000)
+		# des_func_mv_str = np.array2string(final_des_func_mv, precision=9, separator=',', max_line_width=100000)
+
+		# print(str(target)+str('\t%0.2f+-%0.2f\t%0.2f+-%0.2f\t%0.2f+-%0.2f' % (mean_auc_v, std_auc_v, mean_auc_w, std_auc_w, mean_auc_mv, std_auc_mv)))
 		# print(str(target)+str('\t%0.2f+-%0.2f\t%0.2f+-%0.2f' % (mean_auc_v, std_auc_v, mean_auc_w, std_auc_w)))
-		output_csv.write(str(target)+a+","+des_func_v_str[1:-1]+","+des_func_w_str[1:-1]+","+des_func_w_str[1:-1]+"\n")
+		# output_csv.write(str(target)+a+","+des_func_v_str[1:-1]+","+des_func_w_str[1:-1]+","+des_func_w_str[1:-1]+"\n")
 		# output_csv.write(str(target)+a+","+des_final_predictions_v[1:-1]+","+des_final_predictions_w[1:-1]+"\n")
 
 	output_csv.close()
+	auc_output_csv.close()
 
 if __name__ == "__main__":
 
